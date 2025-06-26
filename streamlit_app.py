@@ -63,6 +63,7 @@ def apply_custom_css():
         margin: 0.5rem 0;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         transition: all 0.3s ease;
+        position: relative;
     }
     
     .sentence-item:hover {
@@ -81,6 +82,44 @@ def apply_custom_css():
         font-size: 1rem;
         color: #7f8c8d;
         margin-bottom: 1rem;
+    }
+    
+    .sentence-buttons {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+        align-items: center;
+        margin-top: 1rem;
+    }
+    
+    .play-button {
+        background: #3498db;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        transition: background-color 0.3s ease;
+    }
+    
+    .play-button:hover {
+        background: #2980b9;
+    }
+    
+    .delete-button {
+        background: #e74c3c;
+        color: white;
+        border: none;
+        padding: 0.5rem 0.8rem;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        transition: background-color 0.3s ease;
+    }
+    
+    .delete-button:hover {
+        background: #c0392b;
     }
     
     .category-badge {
@@ -144,54 +183,7 @@ def apply_custom_css():
     </style>
     """, unsafe_allow_html=True)
 
-# 텍스트를 음성으로 변환 (브라우저의 Web Speech API 사용)
-def create_audio_html(text, key):
-    """브라우저의 Web Speech API를 사용한 TTS"""
-    audio_html = f"""
-    <div class="audio-controls">
-        <button onclick="speakText('{text.replace("'", "&#39;")}')" 
-                style="background: #3498db; color: white; border: none; padding: 0.5rem 1rem; 
-                       border-radius: 5px; cursor: pointer; font-size: 0.9rem;">
-            🔊 음성 재생
-        </button>
-    </div>
-    
-    <script>
-    function speakText(text) {{
-        if ('speechSynthesis' in window) {{
-            // 기존 음성 중지
-            speechSynthesis.cancel();
-            
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'en-US';
-            utterance.rate = 0.9;
-            utterance.pitch = 1.0;
-            
-            // 영어 음성 찾기
-            const voices = speechSynthesis.getVoices();
-            const englishVoice = voices.find(voice => 
-                voice.lang.startsWith('en') && voice.localService === false
-            ) || voices.find(voice => voice.lang.startsWith('en'));
-            
-            if (englishVoice) {{
-                utterance.voice = englishVoice;
-            }}
-            
-            speechSynthesis.speak(utterance);
-        }} else {{
-            alert('죄송합니다. 이 브라우저는 음성 합성을 지원하지 않습니다.');
-        }}
-    }}
-    
-    // 음성 목록 로딩
-    if ('speechSynthesis' in window) {{
-        speechSynthesis.onvoiceschanged = function() {{
-            // 음성 목록이 로드되면 업데이트
-        }};
-    }}
-    </script>
-    """
-    return audio_html
+
 
 # 문장 추가 함수
 def add_sentence(english, korean, category):
@@ -395,7 +387,7 @@ def main():
             
             st.markdown(f"""
             <div class="audio-controls">
-                <button onclick="speakText('{all_text.replace("'", "&#39;")}')" 
+                <button onclick="speakAllText('{all_text.replace("'", "&#39;")}')" 
                         style="background: #27ae60; color: white; border: none; padding: 0.8rem 2rem; 
                                border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: bold;">
                     🎵 전체 {len(filtered_sentences)}개 문장 재생
@@ -403,7 +395,7 @@ def main():
             </div>
             
             <script>
-            function speakText(text) {{
+            function speakAllText(text) {{
                 if ('speechSynthesis' in window) {{
                     speechSynthesis.cancel();
                     
@@ -417,21 +409,30 @@ def main():
                             utterance.rate = 0.9;
                             utterance.pitch = 1.0;
                             
-                            const voices = speechSynthesis.getVoices();
-                            const englishVoice = voices.find(voice => 
-                                voice.lang.startsWith('en') && voice.localService === false
-                            ) || voices.find(voice => voice.lang.startsWith('en'));
-                            
-                            if (englishVoice) {{
-                                utterance.voice = englishVoice;
-                            }}
-                            
-                            utterance.onend = function() {{
-                                currentIndex++;
-                                setTimeout(speakNext, 1000); // 1초 간격
-                            }};
-                            
-                            speechSynthesis.speak(utterance);
+                            // 음성 로딩 대기
+                            setTimeout(() => {{
+                                const voices = speechSynthesis.getVoices();
+                                const englishVoice = voices.find(voice => 
+                                    voice.lang.startsWith('en') && !voice.localService
+                                ) || voices.find(voice => voice.lang.startsWith('en'));
+                                
+                                if (englishVoice) {{
+                                    utterance.voice = englishVoice;
+                                }}
+                                
+                                utterance.onend = function() {{
+                                    currentIndex++;
+                                    setTimeout(speakNext, 1000); // 1초 간격
+                                }};
+                                
+                                utterance.onerror = function(event) {{
+                                    console.error('전체 재생 오류:', event);
+                                    currentIndex++;
+                                    setTimeout(speakNext, 1000);
+                                }};
+                                
+                                speechSynthesis.speak(utterance);
+                            }}, 100);
                         }}
                     }}
                     
@@ -439,6 +440,16 @@ def main():
                 }} else {{
                     alert('죄송합니다. 이 브라우저는 음성 합성을 지원하지 않습니다.');
                 }}
+            }}
+            
+            // 음성 목록 로딩
+            if ('speechSynthesis' in window) {{
+                speechSynthesis.onvoiceschanged = function() {{
+                    // 음성 목록이 로드되면 업데이트
+                }};
+                
+                // 즉시 음성 목록 로드 시도
+                speechSynthesis.getVoices();
             }}
             </script>
             """, unsafe_allow_html=True)
@@ -450,19 +461,74 @@ def main():
             category_info = CATEGORIES.get(sentence.get("category", "general"), {"name": "📚 일반", "emoji": "📚"})
             
             with st.container():
-                st.markdown(f"""
-                <div class="sentence-item">
-                    <div class="category-badge">{category_info['emoji']} {category_info['name']}</div>
-                    <div class="sentence-english">{sentence['english']}</div>
-                    <div class="sentence-korean">{sentence['korean']}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                col1, col2 = st.columns([4, 1])
+                # 문장 카드와 버튼을 모두 포함한 HTML
+                col1, col2 = st.columns([10, 1])
                 
                 with col1:
-                    # 음성 재생 버튼
-                    st.markdown(create_audio_html(sentence["english"], f"audio_{sentence['id']}"), unsafe_allow_html=True)
+                    # 음성 재생 버튼이 포함된 문장 카드
+                    escaped_text = sentence['english'].replace("'", "&#39;").replace('"', '&quot;')
+                    
+                    st.markdown(f"""
+                    <div class="sentence-item">
+                        <div class="category-badge">{category_info['emoji']} {category_info['name']}</div>
+                        <div class="sentence-english">{sentence['english']}</div>
+                        <div class="sentence-korean">{sentence['korean']}</div>
+                        <div class="sentence-buttons">
+                            <button class="play-button" onclick="speakText_{sentence['id']}('{escaped_text}')">
+                                🔊 음성 재생
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <script>
+                    function speakText_{sentence['id']}(text) {{
+                        if ('speechSynthesis' in window) {{
+                            // 기존 음성 중지
+                            speechSynthesis.cancel();
+                            
+                            const utterance = new SpeechSynthesisUtterance(text);
+                            utterance.lang = 'en-US';
+                            utterance.rate = 0.9;
+                            utterance.pitch = 1.0;
+                            
+                            // 음성 로딩 대기
+                            setTimeout(() => {{
+                                const voices = speechSynthesis.getVoices();
+                                const englishVoice = voices.find(voice => 
+                                    voice.lang.startsWith('en') && !voice.localService
+                                ) || voices.find(voice => voice.lang.startsWith('en'));
+                                
+                                if (englishVoice) {{
+                                    utterance.voice = englishVoice;
+                                }}
+                                
+                                utterance.onstart = function() {{
+                                    console.log('음성 재생 시작:', text);
+                                }};
+                                
+                                utterance.onerror = function(event) {{
+                                    console.error('음성 재생 오류:', event);
+                                    alert('음성 재생 중 오류가 발생했습니다.');
+                                }};
+                                
+                                speechSynthesis.speak(utterance);
+                            }}, 100);
+                        }} else {{
+                            alert('죄송합니다. 이 브라우저는 음성 합성을 지원하지 않습니다.');
+                        }}
+                    }}
+                    
+                    // 음성 목록 로딩
+                    if ('speechSynthesis' in window) {{
+                        speechSynthesis.onvoiceschanged = function() {{
+                            // 음성 목록이 로드되면 업데이트
+                        }};
+                        
+                        // 즉시 음성 목록 로드 시도
+                        speechSynthesis.getVoices();
+                    }}
+                    </script>
+                    """, unsafe_allow_html=True)
                 
                 with col2:
                     # 삭제 버튼
