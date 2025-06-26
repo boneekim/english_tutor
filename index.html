@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎯 영어튜터</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 영어튜터</h1>
+            <p>아이와 함께하는 일상 영어 학습</p>
+        </header>
+
+        <!-- 문장 추가 섹션 -->
+        <section class="add-section">
+            <h2>📝 새 문장 추가</h2>
+            <div class="input-group">
+                <select id="categorySelect">
+                    <option value="general">📚 일반</option>
+                    <option value="greeting">👋 인사</option>
+                    <option value="mealtime">🍽️ 식사시간</option>
+                    <option value="bedtime">😴 잠자리</option>
+                    <option value="playing">🎮 놀이시간</option>
+                    <option value="study">📖 공부시간</option>
+                    <option value="outside">🚶 외출</option>
+                    <option value="emotion">💝 감정표현</option>
+                    <option value="question">❓ 질문</option>
+                    <option value="daily">🏠 일상</option>
+                </select>
+                <input type="text" id="englishInput" placeholder="영어 문장을 입력하세요">
+                <input type="text" id="koreanInput" placeholder="한국어 뜻을 입력하세요">
+                <button id="addBtn" class="btn-primary">➕ 추가</button>
+            </div>
+        </section>
+
+        <!-- 문장 목록 섹션 -->
+        <section class="sentences-section">
+            <h2>📚 등록된 문장들</h2>
+            
+            <!-- 검색 및 컨트롤 -->
+            <div class="search-controls">
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="🔍 영어 또는 한국어로 검색...">
+                    <button id="clearSearchBtn" class="btn-clear-search">✕</button>
+                </div>
+                <div class="controls">
+                    <button id="playAllBtn" class="btn-secondary">🎵 전체 재생</button>
+                    <button id="clearAllBtn" class="btn-danger">🗑️ 전체 삭제</button>
+                </div>
+            </div>
+
+            <!-- 카테고리 탭 -->
+            <div class="category-tabs" id="categoryTabs">
+                <button class="tab-btn active" data-category="all">🌟 전체</button>
+                <button class="tab-btn" data-category="general">📚 일반</button>
+                <button class="tab-btn" data-category="greeting">👋 인사</button>
+                <button class="tab-btn" data-category="mealtime">🍽️ 식사</button>
+                <button class="tab-btn" data-category="bedtime">😴 잠자리</button>
+                <button class="tab-btn" data-category="playing">🎮 놀이</button>
+                <button class="tab-btn" data-category="study">📖 공부</button>
+                <button class="tab-btn" data-category="outside">🚶 외출</button>
+                <button class="tab-btn" data-category="emotion">💝 감정</button>
+                <button class="tab-btn" data-category="question">❓ 질문</button>
+                <button class="tab-btn" data-category="daily">🏠 일상</button>
+            </div>
+
+            <!-- 문장 목록 -->
+            <div id="sentencesList" class="sentences-list">
+                <!-- 문장들이 여기에 동적으로 추가됩니다 -->
+            </div>
+        </section>
+
+        <!-- TTS 설정 섹션 -->
+        <section class="settings-section">
+            <h2>⚙️ 음성 설정</h2>
+            
+            <!-- 음성 선택 -->
+            <div class="setting-item">
+                <label for="voiceSelect">목소리 선택:</label>
+                <select id="voiceSelect">
+                    <option value="">🔄 음성 로딩 중...</option>
+                </select>
+            </div>
+            
+            <!-- 읽기 속도 -->
+            <div class="setting-item">
+                <label for="speedRange">읽기 속도:</label>
+                <input type="range" id="speedRange" min="0.25" max="4" step="0.25" value="1">
+                <span id="speedValue">1.0</span>
+            </div>
+            
+            <!-- 음성 피치 -->
+            <div class="setting-item">
+                <label for="pitchRange">음성 높이:</label>
+                <input type="range" id="pitchRange" min="0.5" max="2.0" step="0.1" value="1.0">
+                <span id="pitchValue">1.0</span>
+            </div>
+            
+            <!-- 음성 테스트 -->
+            <div class="setting-item">
+                <button id="testVoiceBtn" class="btn-secondary">🎤 음성 테스트</button>
+            </div>
+        </section>
+    </div>
+
+    <!-- 로딩 오버레이 -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="loading-spinner">🔊</div>
+        <p>음성을 재생중입니다...</p>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html> 
