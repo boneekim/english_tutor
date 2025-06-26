@@ -32,6 +32,52 @@ CATEGORIES = {
     'daily': {'name': '🏠 일상', 'emoji': '🏠'}
 }
 
+# 로컬 스토리지 JavaScript 코드 추가
+def add_local_storage_js():
+    st.markdown("""
+    <script>
+    // 로컬 스토리지에 데이터 저장
+    function saveToLocalStorage(data) {
+        try {
+            localStorage.setItem('english_tutor_sentences', JSON.stringify(data));
+            console.log('데이터 저장됨:', data.length, '개 문장');
+        } catch (e) {
+            console.error('로컬 스토리지 저장 실패:', e);
+        }
+    }
+    
+    // 로컬 스토리지에서 데이터 로드
+    function loadFromLocalStorage() {
+        try {
+            const data = localStorage.getItem('english_tutor_sentences');
+            if (data) {
+                const sentences = JSON.parse(data);
+                console.log('데이터 로드됨:', sentences.length, '개 문장');
+                return sentences;
+            }
+        } catch (e) {
+            console.error('로컬 스토리지 로드 실패:', e);
+        }
+        return [];
+    }
+    
+    // Streamlit과 로컬 스토리지 동기화
+    function syncWithStreamlit() {
+        const savedData = loadFromLocalStorage();
+        if (savedData.length > 0) {
+            // 페이지 로드 시 Streamlit에 저장된 데이터 전달
+            window.parent.postMessage({
+                type: 'LOAD_SENTENCES',
+                sentences: savedData
+            }, '*');
+        }
+    }
+    
+    // 페이지 로드 시 동기화 실행
+    document.addEventListener('DOMContentLoaded', syncWithStreamlit);
+    </script>
+    """, unsafe_allow_html=True)
+
 # 세션 상태 초기화
 def initialize_session_state():
     if "sentences" not in st.session_state:
@@ -40,6 +86,8 @@ def initialize_session_state():
         st.session_state.current_category = "all"
     if "search_query" not in st.session_state:
         st.session_state.search_query = ""
+    if "sentences_loaded" not in st.session_state:
+        st.session_state.sentences_loaded = False
 
 # CSS 스타일 적용
 def apply_custom_css():
@@ -87,7 +135,7 @@ def apply_custom_css():
     .sentence-buttons {
         display: flex;
         gap: 0.5rem;
-        justify-content: flex-end;
+        justify-content: flex-start;
         align-items: center;
         margin-top: 1rem;
     }
@@ -107,19 +155,33 @@ def apply_custom_css():
         background: #2980b9;
     }
     
-    .delete-button {
-        background: #e74c3c;
-        color: white;
-        border: none;
-        padding: 0.5rem 0.8rem;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 0.9rem;
-        transition: background-color 0.3s ease;
+    .delete-column .stButton > button {
+        background: #e74c3c !important;
+        color: white !important;
+        border: none !important;
+        padding: 0.3rem 0.5rem !important;
+        border-radius: 50% !important;
+        cursor: pointer !important;
+        font-size: 0.8rem !important;
+        width: 32px !important;
+        height: 32px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        transition: all 0.3s ease !important;
+        margin: 0 !important;
+        min-height: 32px !important;
     }
     
-    .delete-button:hover {
-        background: #c0392b;
+    .delete-column .stButton > button:hover {
+        background: #c0392b !important;
+        transform: scale(1.1) !important;
+        border: none !important;
+    }
+    
+    .delete-column .stButton > button:focus:not(:active) {
+        border: none !important;
+        box-shadow: none !important;
     }
     
     .category-badge {
@@ -196,12 +258,29 @@ def add_sentence(english, korean, category):
             "created_at": datetime.now().isoformat()
         }
         st.session_state.sentences.insert(0, new_sentence)  # 최신 문장을 맨 위에 추가
+        save_to_storage()  # 로컬 스토리지에 저장
         return True
     return False
 
 # 문장 삭제 함수
 def delete_sentence(sentence_id):
     st.session_state.sentences = [s for s in st.session_state.sentences if s["id"] != sentence_id]
+    save_to_storage()  # 로컬 스토리지에 저장
+
+# 로컬 스토리지 저장 함수
+def save_to_storage():
+    # JavaScript를 통해 로컬 스토리지에 저장
+    sentences_json = json.dumps(st.session_state.sentences, ensure_ascii=False)
+    st.markdown(f"""
+    <script>
+    try {{
+        localStorage.setItem('english_tutor_sentences', '{sentences_json.replace("'", "\\'")}');
+        console.log('문장 저장됨: {len(st.session_state.sentences)}개');
+    }} catch (e) {{
+        console.error('저장 실패:', e);
+    }}
+    </script>
+    """, unsafe_allow_html=True)
 
 # 필터링된 문장 목록 가져오기
 def get_filtered_sentences():
@@ -227,10 +306,55 @@ def get_category_stats():
                               if s.get("category", "general") == category])
     return stats
 
+# 로컬 스토리지에서 데이터 로드
+def load_from_local_storage():
+    st.markdown("""
+    <script>
+    // 페이지 로드 시 로컬 스토리지에서 데이터 로드
+    document.addEventListener('DOMContentLoaded', function() {
+        try {
+            const savedData = localStorage.getItem('english_tutor_sentences');
+            if (savedData) {
+                const sentences = JSON.parse(savedData);
+                console.log('로컬 스토리지에서 로드된 문장:', sentences.length, '개');
+                
+                // Streamlit에 데이터 전달 (URL 파라미터 사용)
+                if (sentences.length > 0 && !window.location.search.includes('loaded=true')) {
+                    const url = new URL(window.location);
+                    url.searchParams.set('loaded', 'true');
+                    url.searchParams.set('sentences', btoa(encodeURIComponent(JSON.stringify(sentences))));
+                    window.location.href = url.toString();
+                }
+            }
+        } catch (e) {
+            console.error('로컬 스토리지 로드 오류:', e);
+        }
+    });
+    </script>
+    """, unsafe_allow_html=True)
+
+# URL 파라미터에서 문장 데이터 로드
+def load_sentences_from_url():
+    query_params = st.query_params
+    if 'sentences' in query_params and not st.session_state.sentences_loaded:
+        try:
+            import base64
+            encoded_data = query_params['sentences']
+            decoded_data = base64.b64decode(encoded_data.encode()).decode()
+            sentences_data = json.loads(decoded_data)
+            st.session_state.sentences = sentences_data
+            st.session_state.sentences_loaded = True
+            st.success(f"💾 저장된 {len(sentences_data)}개 문장을 불러왔습니다!")
+        except Exception as e:
+            st.error(f"데이터 로드 오류: {e}")
+
 # 메인 앱
 def main():
     initialize_session_state()
     apply_custom_css()
+    add_local_storage_js()
+    load_from_local_storage()
+    load_sentences_from_url()
     
     # 헤더
     st.markdown("""
@@ -387,7 +511,7 @@ def main():
             
             st.markdown(f"""
             <div class="audio-controls">
-                <button onclick="speakAllText('{all_text.replace("'", "&#39;")}')" 
+                <button onclick="speakAllText()" 
                         style="background: #27ae60; color: white; border: none; padding: 0.8rem 2rem; 
                                border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: bold;">
                     🎵 전체 {len(filtered_sentences)}개 문장 재생
@@ -395,61 +519,84 @@ def main():
             </div>
             
             <script>
-            function speakAllText(text) {{
-                if ('speechSynthesis' in window) {{
-                    speechSynthesis.cancel();
-                    
-                    const sentences = text.split(' ... ');
-                    let currentIndex = 0;
-                    
-                    function speakNext() {{
-                        if (currentIndex < sentences.length) {{
-                            const utterance = new SpeechSynthesisUtterance(sentences[currentIndex]);
-                            utterance.lang = 'en-US';
-                            utterance.rate = 0.9;
-                            utterance.pitch = 1.0;
-                            
-                            // 음성 로딩 대기
-                            setTimeout(() => {{
-                                const voices = speechSynthesis.getVoices();
-                                const englishVoice = voices.find(voice => 
-                                    voice.lang.startsWith('en') && !voice.localService
-                                ) || voices.find(voice => voice.lang.startsWith('en'));
-                                
-                                if (englishVoice) {{
-                                    utterance.voice = englishVoice;
-                                }}
-                                
-                                utterance.onend = function() {{
-                                    currentIndex++;
-                                    setTimeout(speakNext, 1000); // 1초 간격
-                                }};
-                                
-                                utterance.onerror = function(event) {{
-                                    console.error('전체 재생 오류:', event);
-                                    currentIndex++;
-                                    setTimeout(speakNext, 1000);
-                                }};
-                                
-                                speechSynthesis.speak(utterance);
-                            }}, 100);
-                        }}
+            const allSentences = {json.dumps([s["english"] for s in filtered_sentences], ensure_ascii=False)};
+            
+            function speakAllText() {{
+                console.log('전체 재생 시작, 문장 수:', allSentences.length);
+                
+                if (!('speechSynthesis' in window)) {{
+                    alert('죄송합니다. 이 브라우저는 음성 합성을 지원하지 않습니다.');
+                    return;
+                }}
+                
+                speechSynthesis.cancel();
+                let currentIndex = 0;
+                
+                function prepareAndSpeakNext() {{
+                    if (currentIndex >= allSentences.length) {{
+                        console.log('전체 재생 완료');
+                        return;
                     }}
                     
-                    speakNext();
-                }} else {{
-                    alert('죄송합니다. 이 브라우저는 음성 합성을 지원하지 않습니다.');
+                    const text = allSentences[currentIndex];
+                    console.log(`재생 중 (${currentIndex + 1}/${allSentences.length}):`, text);
+                    
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = 'en-US';
+                    utterance.rate = 0.8;
+                    utterance.pitch = 1.0;
+                    utterance.volume = 1.0;
+                    
+                    const voices = speechSynthesis.getVoices();
+                    let selectedVoice = voices.find(voice => 
+                        voice.lang.includes('en') && 
+                        (voice.name.includes('Google') || voice.name.includes('Microsoft') || !voice.localService)
+                    );
+                    
+                    if (!selectedVoice) {{
+                        selectedVoice = voices.find(voice => voice.lang.includes('en'));
+                    }}
+                    
+                    if (selectedVoice) {{
+                        utterance.voice = selectedVoice;
+                    }}
+                    
+                    utterance.onend = function() {{
+                        console.log(`문장 ${currentIndex + 1} 재생 완료`);
+                        currentIndex++;
+                        setTimeout(prepareAndSpeakNext, 1000); // 1초 간격
+                    }};
+                    
+                    utterance.onerror = function(event) {{
+                        console.error(`문장 ${currentIndex + 1} 재생 오류:`, event.error);
+                        currentIndex++;
+                        setTimeout(prepareAndSpeakNext, 1000);
+                    }};
+                    
+                    try {{
+                        speechSynthesis.speak(utterance);
+                    }} catch (error) {{
+                        console.error('음성 재생 예외:', error);
+                        currentIndex++;
+                        setTimeout(prepareAndSpeakNext, 1000);
+                    }}
                 }}
-            }}
-            
-            // 음성 목록 로딩
-            if ('speechSynthesis' in window) {{
-                speechSynthesis.onvoiceschanged = function() {{
-                    // 음성 목록이 로드되면 업데이트
-                }};
                 
-                // 즉시 음성 목록 로드 시도
-                speechSynthesis.getVoices();
+                // 음성 엔진 준비 확인 후 시작
+                if (speechSynthesis.getVoices().length === 0) {{
+                    speechSynthesis.onvoiceschanged = function() {{
+                        prepareAndSpeakNext();
+                        speechSynthesis.onvoiceschanged = null;
+                    }};
+                    setTimeout(() => {{
+                        if (speechSynthesis.onvoiceschanged) {{
+                            speechSynthesis.onvoiceschanged = null;
+                            prepareAndSpeakNext();
+                        }}
+                    }}, 3000);
+                }} else {{
+                    prepareAndSpeakNext();
+                }}
             }}
             </script>
             """, unsafe_allow_html=True)
@@ -464,12 +611,15 @@ def main():
                 # 문장 카드와 버튼을 모두 포함한 HTML
                 col1, col2 = st.columns([10, 1])
                 
-                with col1:
-                    # 음성 재생 버튼이 포함된 문장 카드
-                    escaped_text = sentence['english'].replace("'", "&#39;").replace('"', '&quot;')
+                # 문장 카드를 두 개의 컬럼으로 나누기
+                card_col, delete_col = st.columns([9, 1])
+                
+                with card_col:
+                    escaped_text = sentence['english'].replace("'", "&#39;").replace('"', '&quot;').replace('\\', '\\\\')
                     
+                    # 문장 카드 표시
                     st.markdown(f"""
-                    <div class="sentence-item">
+                    <div class="sentence-item" style="position: relative;">
                         <div class="category-badge">{category_info['emoji']} {category_info['name']}</div>
                         <div class="sentence-english">{sentence['english']}</div>
                         <div class="sentence-korean">{sentence['korean']}</div>
@@ -482,60 +632,97 @@ def main():
                     
                     <script>
                     function speakText_{sentence['id']}(text) {{
-                        if ('speechSynthesis' in window) {{
-                            // 기존 음성 중지
-                            speechSynthesis.cancel();
-                            
+                        console.log('음성 재생 시도:', text);
+                        
+                        if (!('speechSynthesis' in window)) {{
+                            alert('죄송합니다. 이 브라우저는 음성 합성을 지원하지 않습니다.');
+                            return;
+                        }}
+                        
+                        // 기존 음성 중지
+                        speechSynthesis.cancel();
+                        
+                        // 음성 준비 함수
+                        function prepareAndSpeak() {{
                             const utterance = new SpeechSynthesisUtterance(text);
                             utterance.lang = 'en-US';
-                            utterance.rate = 0.9;
+                            utterance.rate = 0.8;
                             utterance.pitch = 1.0;
+                            utterance.volume = 1.0;
                             
-                            // 음성 로딩 대기
-                            setTimeout(() => {{
-                                const voices = speechSynthesis.getVoices();
-                                const englishVoice = voices.find(voice => 
-                                    voice.lang.startsWith('en') && !voice.localService
-                                ) || voices.find(voice => voice.lang.startsWith('en'));
-                                
-                                if (englishVoice) {{
-                                    utterance.voice = englishVoice;
-                                }}
-                                
-                                utterance.onstart = function() {{
-                                    console.log('음성 재생 시작:', text);
-                                }};
-                                
-                                utterance.onerror = function(event) {{
-                                    console.error('음성 재생 오류:', event);
-                                    alert('음성 재생 중 오류가 발생했습니다.');
-                                }};
-                                
+                            const voices = speechSynthesis.getVoices();
+                            console.log('사용 가능한 음성:', voices.length);
+                            
+                            // 영어 음성 찾기 (우선순위: 온라인 → 로컬)
+                            let selectedVoice = voices.find(voice => 
+                                voice.lang.includes('en') && 
+                                (voice.name.includes('Google') || voice.name.includes('Microsoft') || !voice.localService)
+                            );
+                            
+                            if (!selectedVoice) {{
+                                selectedVoice = voices.find(voice => voice.lang.includes('en'));
+                            }}
+                            
+                            if (selectedVoice) {{
+                                utterance.voice = selectedVoice;
+                                console.log('선택된 음성:', selectedVoice.name);
+                            }} else {{
+                                console.log('영어 음성을 찾을 수 없음, 기본 음성 사용');
+                            }}
+                            
+                            utterance.onstart = function() {{
+                                console.log('음성 재생 시작됨');
+                            }};
+                            
+                            utterance.onend = function() {{
+                                console.log('음성 재생 완료됨');
+                            }};
+                            
+                            utterance.onerror = function(event) {{
+                                console.error('음성 재생 오류:', event.error);
+                                alert('음성 재생 중 오류가 발생했습니다: ' + event.error);
+                            }};
+                            
+                            try {{
                                 speechSynthesis.speak(utterance);
-                            }}, 100);
-                        }} else {{
-                            alert('죄송합니다. 이 브라우저는 음성 합성을 지원하지 않습니다.');
+                                console.log('음성 재생 명령 실행됨');
+                            }} catch (error) {{
+                                console.error('음성 재생 예외:', error);
+                                alert('음성 재생을 시작할 수 없습니다.');
+                            }}
                         }}
-                    }}
-                    
-                    // 음성 목록 로딩
-                    if ('speechSynthesis' in window) {{
-                        speechSynthesis.onvoiceschanged = function() {{
-                            // 음성 목록이 로드되면 업데이트
-                        }};
                         
-                        // 즉시 음성 목록 로드 시도
-                        speechSynthesis.getVoices();
+                        // 음성 엔진이 준비될 때까지 대기
+                        if (speechSynthesis.getVoices().length === 0) {{
+                            console.log('음성 목록 로딩 대기 중...');
+                            speechSynthesis.onvoiceschanged = function() {{
+                                console.log('음성 목록 로드 완료');
+                                prepareAndSpeak();
+                                speechSynthesis.onvoiceschanged = null; // 이벤트 리스너 제거
+                            }};
+                            // 타임아웃 설정 (3초 후 강제 실행)
+                            setTimeout(() => {{
+                                if (speechSynthesis.onvoiceschanged) {{
+                                    console.log('음성 로딩 타임아웃, 강제 실행');
+                                    speechSynthesis.onvoiceschanged = null;
+                                    prepareAndSpeak();
+                                }}
+                            }}, 3000);
+                        }} else {{
+                            prepareAndSpeak();
+                        }}
                     }}
                     </script>
                     """, unsafe_allow_html=True)
                 
-                with col2:
-                    # 삭제 버튼
+                with delete_col:
+                    # 삭제 버튼을 위한 HTML 컨테이너
+                    st.markdown('<div class="delete-column">', unsafe_allow_html=True)
                     if st.button("🗑️", key=f"delete_{sentence['id']}", help="문장 삭제"):
                         delete_sentence(sentence["id"])
                         st.success("문장이 삭제되었습니다.")
                         st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
                 
                 st.markdown("---")
 
